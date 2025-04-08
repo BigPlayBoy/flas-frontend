@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>任务管理系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Microsoft YaHei', sans-serif;
+        }
+
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-control,
+        .form-select {
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .btn-primary {
+            background-color: #4e73df;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-weight: 600;
+        }
+
+        .task-item {
+            border-left: 4px solid #4e73df;
+            margin-bottom: 10px;
+            padding: 15px;
+            background-color: white;
+            border-radius: 8px;
+        }
+
+        .task-item:hover {
+            background-color: #f1f5ff;
+        }
+
+        .task-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        #platformRemarks {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #ced4da;
+            font-size: 14px;
+            color: #495057;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        }
+
+        #platformRemarks:focus {
+            border-color: #4e73df;
+            box-shadow: 0 0 0 0.2rem rgba(78, 115, 223, 0.25);
+            outline: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <h4 class="mb-0">任务输入</h4>
+                    </div>
+                    <div class="card-body">
+                        <form id="taskForm">
+                            <div class="mb-3">
+                                <label for="taskType" class="form-label">任务类型</label>
+                                <select class="form-select" id="taskType" required>
+                                    <option value="" selected disabled>请选择任务类型</option>
+                                    <option value="data_export">数据导出</option>
+                                    <option value="report_generate">报告生成</option>
+                                    <option value="data_analysis">数据分析</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="username" class="form-label">账号</label>
+                                <input type="text" class="form-control" id="username" placeholder="请输入账号" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="password" class="form-label">密码</label>
+                                <input type="text" class="form-control" id="password" placeholder="请输入密码" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="platformRemarks">备注：</label>
+                                <textarea id="platformRemarks" name="platformRemarks" rows="2"></textarea>
+                            </div>
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end mb-4">
+                                <button type="button" class="btn btn-primary" id="queryBtn">查询任务</button>
+                            </div>
+                        </form>
+
+                        <div id="taskListSection" class="d-none">
+                            <h5 class="mb-3">任务列表</h5>
+                            <div class="task-list mb-4" id="taskList">
+                                <!-- 任务列表将在这里动态生成 -->
+                            </div>
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                <button type="button" class="btn btn-primary" id="submitBtn">提交任务</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const taskTypeSelect = document.getElementById('taskType');
+            const queryBtn = document.getElementById('queryBtn');
+            const submitBtn = document.getElementById('submitBtn');
+            const taskListSection = document.getElementById('taskListSection');
+            const taskList = document.getElementById('taskList');
+
+            // 存储选中的任务
+            let selectedTasks = [];
+
+
+            // 页面加载时获取平台数据
+            async function loadPlatforms () {
+                try {
+                    const response = await fetch('/api/platforms');
+                    if (!response.ok) {
+                        throw new Error('获取平台数据失败');
+                    }
+                    const data = await response.json();
+                    populateTaskTypeSelect(data);
+                } catch (error) {
+                    console.error('加载平台数据错误:', error);
+                    // 设置默认选项作为后备
+                    taskTypeSelect.innerHTML = `
+                    <option value="" selected disabled>请选择任务类型</option>
+                    <option value="jia">教师研修任务</option>
+                    <option value="jian">其他任务</option>
+                `;
+                }
+            }
+            // 动态填充任务类型下拉菜单
+            function populateTaskTypeSelect (platforms) {
+                taskTypeSelect.innerHTML = '<option value="" selected disabled>请选择任务类型</option>';
+
+                platforms.forEach(platform => {
+                    const option = document.createElement('option');
+                    option.value = platform.englishName;
+                    option.textContent = `${platform.name} - ${platform.description}-价格：${platform.price} 网址：${platform.url}`;
+                    option.dataset.platformId = platform._id;
+                    taskTypeSelect.appendChild(option);
+                });
+            }
+
+            // 初始化加载平台数据
+            loadPlatforms();
+            // 查询按钮事件
+            queryBtn.addEventListener('click', async function () {
+                const taskType = document.getElementById('taskType').value;
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                const selectedOption = document.getElementById('taskType').selectedOptions[0];
+                const englishName = selectedOption.value;
+
+                if (!taskType) {
+                    alert('请选择任务类型');
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/task/list', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            platform_id: '123',
+                            englishName: englishName,
+                            username,
+                            password
+                        })
+                    });
+
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || '查询失败');
+                    }
+
+                    const data = await response.json();
+                    renderTaskList(data.tasks);
+                    taskListSection.classList.remove('d-none');
+                } catch (error) {
+                    alert(error.message || '发生错误，请重试');
+                    console.error('查询错误:', error);
+                }
+            });
+
+            // 提交按钮事件
+            submitBtn.addEventListener('click', async function () {
+                if (selectedTasks.length === 0) {
+                    alert('请至少选择一个任务');
+                    return;
+                }
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                const platformRemarks = document.getElementById('platformRemarks').value;
+                try {
+                    const response = await fetch('/api/task/submit', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+
+                        },
+                        body: JSON.stringify({
+                            tasks: selectedTasks,
+                            username,
+                            password,
+                            platformRemarks
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || '提交失败');
+                    }
+
+                    const result = await response.json();
+                    alert('任务提交成功: ' + result.message);
+                    taskListSection.classList.add('d-none');
+                } catch (error) {
+                    alert(error.message || '提交任务时发生错误');
+                    console.error('提交错误:', error);
+                }
+            });
+
+            // 渲染任务列表
+            function renderTaskList (tasks) {
+                taskList.innerHTML = '';
+                selectedTasks = [];
+
+                tasks.forEach(task => {
+                    const taskItem = document.createElement('div');
+                    taskItem.className = 'task-item';
+                    taskItem.innerHTML = `
+                      <div class="form-check">
+                          <input class="form-check-input task-checkbox" type="checkbox" value="${task.id}" id="task-${task.id}">
+                          <label class="form-check-label" for="task-${task.id}">
+                              <h6>${task.name}</h6>
+                              <p class="text-muted mb-0">${task.description}</p>
+                          </label>
+                      </div>
+                  `;
+                    taskList.appendChild(taskItem);
+
+                    // 添加复选框事件监听
+                    const checkbox = taskItem.querySelector('.task-checkbox');
+                    checkbox.addEventListener('change', function () {
+                        if (this.checked) {
+                            selectedTasks.push(task);
+                        } else {
+                            selectedTasks = selectedTasks.filter(t => t.id !== task.id);
+                        }
+                    });
+                });
+            }
+        });
+    </script>
+</body>
+
+</html>
